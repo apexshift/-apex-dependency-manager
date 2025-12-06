@@ -1,3 +1,3 @@
-console.log('Phase 0 ready – testing ground active')
+console.log('APEX/DEPMAN – Foundation ready')
 window.Apex = window.Apex || {}
 console.log('window.Apex object created')
