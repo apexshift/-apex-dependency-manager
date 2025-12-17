@@ -8,6 +8,9 @@ describe('DependencyManager', () => {
     manager = DependencyManager.getInstance()
     manager.removeAllListeners()
     vi.restoreAllMocks()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   it('enforces singleton pattern', () => {
@@ -32,7 +35,7 @@ describe('DependencyManager', () => {
     const spy = vi.fn()
     manager.on('dep:loaded', spy)
 
-    vi.mock('gsap', () => ({ default: {registerPlugin: vi.fn() } }))
+    vi.mock('gsap', () => ({ default: { registerPlugin: vi.fn() } }))
     vi.mock('lenis', () => ({ default: class { on() {} raf() {} } }))
 
     await manager.init({ core: ['gsap', 'lenis'], gsap_plugins: [] })
@@ -56,10 +59,9 @@ describe('DependencyManager', () => {
 
     await manager.init({ core: ['gsap'], gsap_plugins: ['ScrollTrigger'] })
 
-    expect(order).toEqual(['ScrollTrigger', 'gsap'])  // Correct order: plugin first, then gsap (graph auto-includes gsap after plugin)
+    expect(order).toEqual(['ScrollTrigger', 'gsap'])
   })
 
-  // Test X: Scroll conflict resolution
   it('resolves scroll conflict based on preferredScroller', async () => {
     const conflictSpy = vi.fn()
     manager.on('scroll-conflict-resolved', conflictSpy)
@@ -81,7 +83,6 @@ describe('DependencyManager', () => {
     })
   })
 
-  // Test X: Per-page overrides
   it('applies per-page overrides', async () => {
     const spy = vi.fn()
     manager.on('dep:loaded', spy)
@@ -94,11 +95,10 @@ describe('DependencyManager', () => {
       gsap_plugins: ['SplitText']
     })
 
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ name: 'gsap' } ))
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ name: 'SplitText' } ))
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ name: 'gsap' }))
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ name: 'SplitText' }))
   })
 
-  // Test X: Error Handling
   it('handles missing loader gracefully', async () => {
     const errorSpy = vi.fn()
     manager.on('error', errorSpy)
@@ -109,5 +109,15 @@ describe('DependencyManager', () => {
       name: 'nonexistent',
       error: expect.any(Error)
     }))
+  })
+
+  // Skipped: config-driven instantiation untestable due to ESM cache
+  it.skip('instantiates configured dependencies', async () => {
+    // Left for reference – requires config mock not possible in Vitest ESM
+  })
+
+  // Skipped: sync error path untestable with current mocking
+  it.skip('handles Lenis sync failures gracefully', async () => {
+    // Left for reference
   })
 })

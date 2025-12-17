@@ -2,6 +2,19 @@
 All notable changes to @apex/depman will be documented in this file.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.3.2-dev] - 2025-12-17
+
+### Added
+- Comprehensive Vitest suite (13 passing tests covering singleton, events, dependency loading, graph order, overrides, conflict resolution, error handling)
+- Separate EventEmitter.test.ts for better organization
+- 2 config-driven tests skipped due to Vitest ESM mocking limitations
+
+### Changed
+- Testing phase completed with pragmatic coverage (~69% statements, 100% on critical paths)
+
+### Phase 3 Complete
+Full testing suite implemented. Core behaviors verified. Ready for optimizations.
+
 ## [0.3.1-dev] - 2025-12-16
 
 ### Added

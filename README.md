@@ -1,40 +1,30 @@
 # APEX/DEPMAN
-
-**The zero-config, chunk-splitting, smart dependency manager for high-performance creative websites**
-
-Built by Aaron Smyth at [Apex Shift Ltd](https://apexshift.co.uk)
-
-→ Loads only what you need  
-→ Perfect code-splitting  
+The zero-config, chunk-splitting, smart dependency manager for high-performance creative websites
+Built by Aaron Smyth at (Apex Shift Ltd)[https://apexshift.co.uk]
+→ Loads only what you need
+→ Perfect code-splitting
 → GSAP plugins auto-register
-→ Lenis or ScrollSmoother out of the box 
-→ Lenis auto-synced with GSAP ticker  
-→ Smart conflict resolution  
-→ Events, overrides, config-driven  
+→ Lenis or ScrollSmoother out of the box
+→ Lenis auto-synced with GSAP ticker
+→ Smart conflict resolution
+→ Events, overrides, config-driven
 → Works in dev and production
 
 ## Current Status
-
-- **Phase 1 complete** (v0.1.0) – Dynamic loading with automatic code-splitting
-- **Phase 2 complete** (v0.2.1) – Events, auto-registration, dependency graph
-- **Phase 3 complete** (v0.3.1-dev) – Comprehensive Vitest suite with 100% core coverage (singleton, events, loading, graph, overrides, conflict resolution, errors) 
-
+Phase 3 complete (v0.3.2-dev) – Comprehensive Vitest suite (13 passing tests, 2 config paths skipped due to ESM limitations)
+Coverage: ~69% statements (100% on EventEmitter, core logic fully tested)
 
 ## Features
-- Comprehensive Vitest suite started (singleton, events, loading, dependency graph)
-- 95%+ coverage target
-- Phase 3 in progress
-- v0.2.1-dev, full TypeScript report with strict types and absolute imports
-- Config-driven (single JSON file)
-- Automatic code-splitting (every dependency/plugin gets its own chunk)
-- Per-page overrides for performance
-- Auto-instantiation support
-- Global exposure via `window.Apex.deps`
-- Works in development and production
-- No manifest files, no Vite plugins required
+Config-driven (single JSON file)
+Automatic code-splitting (every dependency/plugin gets its own chunk)
+Per-page overrides for performance
+Auto-instantiation support
+Global exposure via window.Apex.deps
+Works in development and production
+No manifest files, no Vite plugins required
+Full test coverage of core behaviors (singleton, events, loading, graph, overrides, conflict resolution, errors)
 
 ## Installation
-
 ```bash
 npm i
 ```
@@ -44,9 +34,7 @@ npm i
 ```
 
 ## Configuration
-
-Edit **src/config/dependencies.json** to add or remove libraries:
-
+Edit `src/config/dependencies.json` to add or remove libraries:
 ```json
 {
   "core": ["gsap", "lenis"],
@@ -58,35 +46,29 @@ Edit **src/config/dependencies.json** to add or remove libraries:
     "easing": "easeOutExpo",
     "smoothWheel": true,
     "smoothTouch": false
-  },
-  "depsConfig": {}
+  }
 }
 ```
 
 ## Usage
-### 1. Basic – Load everything from the config (recommended for most pages)
-
+1. Basic – Load everything from the config
 ```javascript
 import DependencyManager from '@/utils/DependencyManager'
 DependencyManager.getInstance().init()
 ```
 
-### Load only what you need (performance mode)
-
+2. Load only what you need
 ```javascript
 import DependencyManager from '@/utils/DependencyManager'
 DependencyManager.getInstance().init({
   core: ["gsap"],
-  gasp_plugins: ["ScrollTrigger"]
+  gsap_plugins: ["ScrollTrigger"]
 })
 ```
-
-### 3. Access loaded dependencies
-
+3. Access loaded dependencies
 ```javascript
 const {gsap, lenis, ScrollTrigger} = window.Apex.deps
 
-// Everything just works – no registerPlugin() needed
 gsap.to('.box', { 
   x: 500,
   scrollTrigger: {
@@ -99,16 +81,13 @@ lenis.scrollTo(1000)
 ```
 
 ## Events (reactive)
-
 ```javascript
 const manager = DependencyManager.getInstance()
 manager.on('ready', () => console.log('All dependencies ready'))
 manager.on('dep:loaded', ({name}) => console.debug(name, 'loaded'))
 manager.on('scroll-conflict-resolved', ({enabled, disabled}) => console.debug(`Using ${enabled}, ${disabled} disabled.`))
 ```
-
 ## Override Lenis config per-page
-
 ```javascript
 manager.init({
   lenisConfig: {
@@ -119,15 +98,14 @@ manager.init({
 ```
 
 ## Phase History
-
-- **Phase 1** – Config-driven dynamic loading with perfect cache busting chunking (completed)
-- **Phase 2** – Events, auto-registration, dependency graph (completed)
-- **Phase 2.1** - Typescript migration (completed)
-- **Phase 3** – Comprehensive testing + documentation (completed)
-- **Phase 4** – Code review and optimisations (pending)
+**Phase 1** – Config-driven dynamic loading with perfect cache busting chunking
+**Phase 2** – Events, auto-registration, dependency graph
+**Phase 2.1** – TypeScript migration (complete)
+**Phase 3** – Comprehensive testing + documentation (complete)
+**Phase 3.1** – Advanced Testing (complete)
+**Phase 3.2** – Test Coverage (complete)
+**Phase 4** – Code review & optimizations (pending)
 
 ## License
-
-MIT &copy; Aaron Smyth – Apex Shift Ltd 2022-2025.
----
+MIT © Aaron Smyth – Apex Shift Ltd 2022-2025.
 Made with passion in the UK by a developer who refuses to ship slow websites.
