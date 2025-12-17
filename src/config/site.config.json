@@ -1,0 +1,14 @@
+{
+  "core": ["lenis", "gsap"],
+  "gsap_plugins": ["GSDevTools", "SplitText", "ScrollTrigger"],
+  "instantiate": ["lenis"],
+  "preferredScroller": "lenis",
+  "lenisConfig": {
+    "duration": 1.2,
+    "easing": "easeOutExpo",
+    "smoothWheel": true,
+    "smoothTouch": false,
+    "normalizeWheel": true
+  },
+  "dependencyGraph": {}
+}
