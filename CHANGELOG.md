@@ -1,5 +1,5 @@
 # Changelog
-All notable changes to @apex/depman will be documented in this file.
+All notable changes to `@apex/timebase` will be documented in this file.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
 ## [1.0.0] - 2025-12-17
@@ -36,9 +36,6 @@ Full testing suite implemented. Core behaviors verified. Ready for optimizations
 - Comprehensive Vitest suite covering singleton, events, dependency loading, graph order, scroll conflict resolution, per-page overrides, error handling
 - Full mocking for GSAP, Lenis, plugins in tests
 - All core behaviors tested and passing
-
-### Phase 3 Complete
-Testing suite complete with high coverage.
 
 ## [0.3.0-dev] - 2025-12-16
 
