@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Lint commits to adhere to commit message conventions and standards
+npx commitLint --edit "$1"
