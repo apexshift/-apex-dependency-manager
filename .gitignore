@@ -3,7 +3,7 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log
-package-lock.json
+# package-lock.json
 pnpm-lock.yaml
 yarn.lock
 
@@ -56,3 +56,7 @@ pids
 # Temporary folders
 tmp/
 temp/
+
+# Cache/Files created during hook runs (optional, but good hygiene)
+.eslintcache
+.prettierignore.cache

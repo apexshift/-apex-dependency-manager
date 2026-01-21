@@ -1,28 +1,68 @@
-import siteConfig from '@/config/site.config.json' with { type: 'json' }
-import EventEmitter from '@/events/EventEmitter'
+import siteConfig from '@/config/site.config.json' with { type: 'json' };
+import EventEmitter from '@/events/EventEmitter';
+import Ease, { type EasingFunction } from './Ease';
 
-
+/* Types */
 interface SiteConfig {
-  core: string[]
-  gsap_plugins: string[]
-  instantiate?: string[]
-  preferredScroller?: 'lenis' | 'ScrollSmoother'
-  lenisConfig?: Record<string, any>
-  dependencyGraph?: Record<string, string[]>
+  core: string[];
+  gsap_plugins: string[];
+  instantiate?: string[];
+  preferredScroller?: 'lenis' | 'ScrollSmoother';
+  lenisConfig?: LenisConfig;
+  dependencyGraph?: Record<string, string[]>;
 }
 
 type Override = Partial<{
-  core: string[],
-  gsap_plugins: string[],
-  lenisConfig: Record<string, any>
-  preferredScroller: 'lenis' | 'ScrollSmoother'
-}>
+  core: string[];
+  gsap_plugins: string[];
+  lenisConfig: LenisConfig;
+  preferredScroller: 'lenis' | 'ScrollSmoother';
+}>;
 
+interface LenisConfig {
+  duration?: number;
+  easing?: EasingFunction | string;
+  smooth?: boolean;
+  [key: string]: unknown; // fallback for additional options
+}
+
+interface LoadedDeps {
+  gsap?: typeof import('gsap');
+  lenis?: Lenis;
+  ScrollTrigger?: ScrollTrigger;
+  ScrollSmoother?: ScrollSmoother;
+  [plugin: string]: unknown;
+}
+
+interface Lenis {
+  destroy?: () => void;
+  on?: (event: string, callback: (...args: unknown[]) => void) => void;
+  raf?: (delta: number) => void;
+}
+
+interface ScrollTrigger {
+  update?: () => void;
+}
+
+interface ScrollSmoother {
+  destroy?: () => void;
+}
+
+interface GsapWithPlugins {
+  registerPlugin: (...plugins: unknown[]) => void;
+  ticker: {
+    add: (cb: (time: number) => void) => void;
+    lagSmoothing?: (threshold: number) => void;
+  };
+}
+
+/** Core dependecy loaders */
 const coreDependencies = {
   gsap: () => import('gsap'),
   lenis: () => import('lenis'),
-}
+};
 
+/** GSAP plugin loaders */
 const gsapPlugins = {
   CustomBounce: () => import('gsap/CustomBounce'),
   CustomEase: () => import('gsap/CustomEase'),
@@ -47,244 +87,254 @@ const gsapPlugins = {
   ScrollTrigger: () => import('gsap/ScrollTrigger'),
   SplitText: () => import('gsap/SplitText'),
   TextPlugin: () => import('gsap/TextPlugin'),
-}
+};
 
+/** Shallow merged loaders */
+const loaders: Record<string, () => Promise<unknown>> = {
+  ...coreDependencies,
+  ...gsapPlugins,
+};
+
+/** GSAP plugin dependency graph */
 const GSAP_DEPENDENCY_GRAPH = {
   CustomBounce: ['CustomEase'],
   CustomWiggle: ['CustomEase'],
   MotionPathHelper: ['MotionPathPlugin'],
   ScrollSmoother: ['ScrollTrigger'],
-}
+};
 
-const loaders = {
-  ...coreDependencies,
-  ...gsapPlugins
-}
-
+/** Dependency Manager */
 export default class DependencyManager extends EventEmitter {
-  static #instance: DependencyManager | null = null
-  #deps: Record<string, any> = {}
-  #ready = false
+  static #instance: DependencyManager | null = null;
+  private deps: LoadedDeps = {};
+  private ready: boolean = false;
 
   constructor() {
-    super()
+    super();
     if (DependencyManager.#instance) {
-      throw new Error(`Use DependencyManager.getInstance()`)
+      throw new Error(`Use DependencyManager.getInstance()`);
     }
   }
 
-  /**
-   * Returns the singleton instance of DependencyManager.
-   * 
-   * @returns {DependencyManager} The single shared instance
-   */
+  /* Singleton */
   static getInstance(): DependencyManager {
-    if (!this.#instance) this.#instance = new DependencyManager()
-    return this.#instance as DependencyManager
+    if (!this.#instance) this.#instance = new DependencyManager();
+    return this.#instance as DependencyManager;
   }
 
-  /**
-   * Indicates whether all requested dependencies have finished loading and are ready for use.
-   * 
-   * @returns {boolean} true when initialization is complete
-   */
-  get isReady(): boolean { return this.#ready }
-  /**
-   * Returns a frozen shallow copy of the loaded dependencies.
-   * Exposed globally as `window.Apex.deps` after initialization.
-   * 
-   * @returns {Readonly<Record<string, any>>} Immutable view of loaded libraries/plugins
-   */
-  get loaded(): Readonly<Record<string, any>> { return Object.freeze({ ...this.#deps }) }
+  get isReady(): boolean {
+    return this.ready;
+  }
 
-  /**
-   * Initializes the dependency manager.
-   * 
-   * Loads dependencies based on `dependencies.json` config, applying optional per-page override.
-   * Performs auto-registration of GSAP plugins, resolves scroll conflicts, syncs Lenis with GSAP ticker,
-   * and exposes loaded deps on `window.Apex`.
-   * 
-   * Emits events: `init:start`, `dep:loaded`, `plugin:registered`, `scroll-conflict-resolved`,
-   * `smart-lenis-synced`, `ready`, and `error` on failure.
-   * 
-   * @param override Optional partial override of config
-   * @param override.core Override core dependencies (e.g. ['gsap'])
-   * @param override.gsap_plugins Override GSAP plugins to load
-   * @param override.lenisConfig Custom Lenis options for this page
-   * @param override.preferredScroller 'lenis' or 'ScrollSmoother' to resolve conflict
-   * 
-   * @returns {Promise<void>}
-   */
-  async init(override: Partial<{core: string[]; gsap_plugins: string[]; lenisConfig: Record<string, any>; preferredScroller: 'lenis' | 'ScrollSmoother' }> = {}) {
-    this.emit('init:start', undefined)
+  get loaded(): Readonly<LoadedDeps> {
+    return Object.freeze({ ...this.deps });
+  }
 
-    await this.#loadDependencies(override)
-    this.#registerGsapPlugins()
-    this.#resolveScrollConflict(override)
-    this.#syncLenisWithGsap()
+  async init(override: Override = {}): Promise<void> {
+    this.emit('init:start', undefined);
 
-    this.#finalize()
+    await this.#loadDependencies(override);
+    this.#registerGsapPlugins();
+    this.#resolveScrollConflict(override);
+    this.#syncLenisWithGsap();
+
+    this.#finalize();
   }
 
   // 1. Load dependencies with config override
-  async #loadDependencies(override: Partial<{ core: string[]; gsap_plugins: string[]; lenisConfig: Record<string, any>; preferredScroller: 'lenis' | 'ScrollSmoother' }> = {}) {
+  async #loadDependencies(override: Override = {}): Promise<void> {
     const config = {
       deps: override.core ?? siteConfig.core,
-      plugins: override.gsap_plugins ?? siteConfig.gsap_plugins
-    }
+      plugins: override.gsap_plugins ?? siteConfig.gsap_plugins,
+    };
 
-    const all = [...new Set([...config.deps, ...config.plugins])]
-
-    const loadOrder = this.#resolveGsapDependencyGraph(all)
+    const all = [...new Set([...config.deps, ...config.plugins])];
+    const loadOrder = this.#resolveGsapDependencyGraph(all);
 
     await Promise.all(
       loadOrder.map(async (name: string) => {
-        const loader = (loaders as Record<string, () => Promise<any>>)[name]
+        const loader = loaders[name];
         if (!loader) {
-          const err = new Error(`No loader found for ${name}`)
-          this.emit('error', { name, error: err })
-          if(import.meta.env.DEV) console.warn(`no loader found for ${name}`)
-          return
+          const err = new Error(`No loader found for ${name}`);
+          this.emit('error', { name, error: err });
+          if (import.meta.env.DEV) console.warn(`no loader found for ${name}`);
+          return;
         }
 
         try {
-          const module = await loader()
-          let instance = module.default ?? module[name] ?? module
+          const moduleResult = await loader();
+          let instance: unknown;
 
-          if(name === "lenis" && siteConfig.instantiate?.includes(name)) {
-            const lenisConfig = override.lenisConfig ?? siteConfig.lenisConfig ?? {}
-            instance = new instance(lenisConfig)
-          } else if(siteConfig.instantiate?.includes(name)) {
-            instance = new instance()
+          if (typeof moduleResult === 'object' && moduleResult !== null) {
+            instance = 'default' in moduleResult ? moduleResult.default : moduleResult;
+          } else {
+            instance = moduleResult;
           }
 
-          this.#deps[name] = instance
-          this.emit('dep:loaded', { name, instance })
-          if(import.meta.env.DEV) console.log(`%c${name} loaded`, 'color:#00ff9d')
+          // --- TS strict: cast instance to constructor
+          if (name === 'lenis' && siteConfig.instantiate?.includes(name)) {
+            const rawConfig = override.lenisConfig ?? siteConfig.lenisConfig ?? {};
+
+            // Resolve easing string -> function
+            let easingFn: EasingFunction;
+
+            if (typeof rawConfig.easing === 'string') {
+              easingFn = Ease.resolve(rawConfig.easing);
+            } else if (typeof rawConfig.easing === 'function') {
+              easingFn = rawConfig.easing;
+            } else {
+              easingFn = (t: number) => t;
+            }
+
+            const lenisConfig: LenisConfig = {
+              ...rawConfig,
+              easing: easingFn,
+            };
+            instance = new (instance as new (config: LenisConfig) => Lenis)(lenisConfig); // <-- Lenis typed
+          } else if (siteConfig.instantiate?.includes(name)) {
+            instance = new (instance as new () => unknown)(); // generic constructor
+          }
+
+          this.deps[name] = instance as LoadedDeps[string]; // cast to LoadedDeps
+          this.emit('dep:loaded', { name, instance });
+          if (import.meta.env.DEV) console.log(`%c${name} loaded`, 'color:#00ff9d');
         } catch (err) {
-          this.emit('error', { name, error: err })
-          if(import.meta.env.DEV) console.error(`Failed to load ${name}`, err)
+          this.emit('error', { name, error: err });
+          if (import.meta.env.DEV) console.error(`Failed to load ${name}`, err);
         }
-      })
-    )
+      }),
+    );
   }
 
   // 2. Auto-register GSAP plugins
   #registerGsapPlugins() {
-    if (!this.#deps.gsap) return
+    if (!this.deps.gsap) return;
 
-    Object.keys(this.#deps).forEach(name => {
-      const plugin = this.#deps[name]
+    Object.keys(this.deps).forEach((name) => {
+      const plugin = this.deps[name];
       if (typeof plugin === 'function' || (typeof plugin === 'object' && plugin !== null)) {
         try {
-          this.#deps.gsap.registerPlugin(plugin)
-          this.emit('plugin:registered', { name, plugin })
+          (this.deps.gsap as unknown as GsapWithPlugins).registerPlugin(plugin);
+          this.emit('plugin:registered', { name, plugin });
         } catch (err) {
-          this.emit('error', { name, error: err })
-          if(import.meta.env.DEV) console.warn(`Failed to register ${name}:`, err)
+          this.emit('error', { name, error: err });
+          if (import.meta.env.DEV) console.warn(`Failed to register ${name}:`, err);
         }
       }
-    })
+    });
   }
 
   // 3. Resolve scroll conflict
-  #resolveScrollConflict(override: Partial<{ core: string[]; gsap_plugins: string[]; lenisConfig: Record<string, any>; preferredScroller: 'lenis' | 'ScrollSmoother' }> = {}) {
-    if (!this.#deps.lenis || !this.#deps.ScrollSmoother) return
+  #resolveScrollConflict(override: Override = {}) {
+    if (!this.deps.lenis || !this.deps.ScrollSmoother) return;
 
-    const preferred = override.preferredScroller ?? siteConfig.preferredScroller ?? 'lenis'
-
-    let disabled = null
-    let enabled = null
+    const preferred = override.preferredScroller ?? siteConfig.preferredScroller ?? 'lenis';
+    let disabled = null;
+    let enabled = null;
 
     if (preferred === 'ScrollSmoother') {
-      disabled = 'Lenis'
-      enabled = 'ScrollSmoother'
-      if (this.#deps.lenis.destroy) this.#deps.lenis.destroy()
-      delete this.#deps.lenis
+      disabled = 'Lenis';
+      enabled = 'ScrollSmoother';
+      (this.deps.lenis as Lenis).destroy?.(); // optional chaining
+      delete this.deps.lenis;
     } else {
-      disabled = 'ScrollSmoother'
-      enabled = 'Lenis'
-      if (this.#deps.ScrollSmoother.destroy) this.#deps.ScrollSmoother.destroy()
-      delete this.#deps.ScrollSmoother
+      disabled = 'ScrollSmoother';
+      enabled = 'Lenis';
+      (this.deps.ScrollSmoother as ScrollSmoother).destroy?.();
+      delete this.deps.ScrollSmoother;
     }
 
-    const message = `[APEX/DEPMAN] Scroll conflict resolved: ${enabled} enabled, ${disabled} disabled.`
-    if (import.meta.env.DEV) console.warn('%c' + message, 'color:#ff9800;font-weight:bold')
-    this.emit('scroll-conflict-resolved', { enabled, disabled, preferred })
+    const message = `[APEX/DEPMAN] Scroll conflict resolved: ${enabled} enabled, ${disabled} disabled.`;
+    if (import.meta.env.DEV) console.warn('%c' + message, 'color:#ff9800;font-weight:bold');
+    this.emit('scroll-conflict-resolved', { enabled, disabled, preferred });
   }
 
   // 4. Smart Lenis sync
   #syncLenisWithGsap() {
-    if (!this.#deps.lenis || !this.#deps.gsap) return
+    if (!this.deps.lenis || !this.deps.gsap) return;
 
     try {
-      if (this.#deps.ScrollTrigger) {
-        this.#deps.lenis.on('scroll', this.#deps.ScrollTrigger.update)
+      const lenis = this.deps.lenis as Lenis;
+      const scrollTrigger = this.deps.ScrollTrigger as ScrollTrigger;
+
+      if (lenis.on && scrollTrigger?.update) {
+        lenis.on('scroll', () => scrollTrigger.update?.()); // <-- fix TS: don't invoke immediately
       }
 
-      this.#deps.gsap.ticker.add((time: number) => {
-        this.#deps.lenis.raf(time * 1000)
-      })
+      const gsap = this.deps.gsap as unknown as GsapWithPlugins;
+      gsap.ticker.add((time: number) => {
+        lenis.raf?.(time * 1000); // optional chaining
+      });
 
-      if (this.#deps.ScrollTrigger) {
-        this.#deps.gsap.ticker.lagSmoothing(0)
-      }
+      gsap.ticker.lagSmoothing?.(0);
 
-      if (import.meta.env.DEV) console.log('%cSmart Lenis: fully synced with GSAP/ScrollTrigger', 'color:#00d1b2;font-weight:bold')
-      this.emit('smart-lenis-synced', { mode: 'full' })
+      if (import.meta.env.DEV)
+        console.log(
+          '%cSmart Lenis: fully synced with GSAP/ScrollTrigger',
+          'color:#00d1b2;font-weight:bold',
+        );
+
+      this.emit('smart-lenis-synced', { mode: 'full' });
     } catch (err) {
-      if (import.meta.env.DEV) console.warn('Failed to sync Lenis with GSAP/ScrollTrigger:', err)
-      this.emit('smart-lenis-sync-failed', { error: err })
+      if (import.meta.env.DEV) console.warn('Failed to sync Lenis with GSAP/ScrollTrigger:', err);
+      this.emit('smart-lenis-sync-failed', { error: err });
     }
   }
 
-  // 5. Resolve dependency graph – auto-include and correct load order (gsap phase)
+  // 5. Resolve dependency graph – auto-include and correct load order
   #resolveGsapDependencyGraph(requestedNames: string[]) {
-    const GSAP_PLUGIN_NAMES = new Set(Object.keys(gsapPlugins))
-    const userGraph = siteConfig.dependencyGraph || {}
-    const graph = {...GSAP_DEPENDENCY_GRAPH, ...userGraph}
+    const GSAP_PLUGIN_NAMES = new Set(Object.keys(gsapPlugins));
+    const userGraph = siteConfig.dependencyGraph || {};
+    const graph = { ...GSAP_DEPENDENCY_GRAPH, ...userGraph };
 
-    const toLoad = new Set(requestedNames)
-    const visited = new Set()
-    const order: string[] = []
+    const toLoad = new Set(requestedNames);
+    const visited = new Set();
+    const order: string[] = [];
 
     const visit = (name: string) => {
-      if(visited.has(name)) return
-      visited.add(name)
+      if (visited.has(name)) return;
+      visited.add(name);
 
-      const deps = (graph as Record<string, string[]>)[name] || []
+      const deps = (graph as Record<string, string[]>)[name] || [];
       deps.forEach((dep: string) => {
-        if(!toLoad.has(dep)) {
-          if (import.meta.env.DEV) console.info(`%c[APEX/DEPMAN] Auto-including dependency: ${dep} ← required by ${name}`, 'color:#00bcd4')
-          toLoad.add(dep)
+        if (!toLoad.has(dep)) {
+          if (import.meta.env.DEV)
+            console.info(
+              `%c[APEX/DEPMAN] Auto-including dependency: ${dep} ← required by ${name}`,
+              'color:#00bcd4',
+            );
+          toLoad.add(dep);
         }
-        visit(dep)
-      })
+        visit(dep);
+      });
 
-      // Auto-infer gsap for any GSAP plugin
-      if(GSAP_PLUGIN_NAMES.has(name) && !toLoad.has('gsap')) {
-        if (import.meta.env.DEV) console.info(`%c[APEX/DEPMAN] Auto-including gsap ← required by GSAP plugin ${name}`, 'color:#00bcd4')
-        toLoad.add('gsap')
-        visit('gsap')
+      if (GSAP_PLUGIN_NAMES.has(name) && !toLoad.has('gsap')) {
+        if (import.meta.env.DEV)
+          console.info(
+            `%c[APEX/DEPMAN] Auto-including gsap ← required by GSAP plugin ${name}`,
+            'color:#00bcd4',
+          );
+        toLoad.add('gsap');
+        visit('gsap');
       }
 
-      order.push(name)
-    }
+      order.push(name);
+    };
 
-    requestedNames.forEach(visit)
+    requestedNames.forEach(visit);
 
-    const loadOrder = order.reverse()
-    if (import.meta.env.DEV) console.log('%cDependency load order:', 'color:#ff9d', loadOrder)
-    return loadOrder
+    const loadOrder = order.reverse();
+    if (import.meta.env.DEV) console.log('%cDependency load order:', 'color:#ff9d', loadOrder);
+    return loadOrder;
   }
 
   // 6. Finalize initialization
   #finalize() {
-    window.Apex ??= {}
-    window.Apex.deps = this.loaded
-    window.Apex.DependencyManager = this
+    window.Apex ??= {};
+    window.Apex.deps = this.loaded;
+    window.Apex.DependencyManager = this;
 
-    this.#ready = true
-    this.emit('ready', this.loaded)
+    this.ready = true;
+    this.emit('ready', this.loaded);
   }
 }
